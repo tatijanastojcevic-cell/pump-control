@@ -1,4 +1,164 @@
-<script>
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Bašta - Kontrola Zalivanja</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0f172a; color: #f1f5f9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 16px;
+  }
+  .card {
+    width: 100%; max-width: 420px;
+    background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(10px);
+    border-radius: 24px; padding: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+    border: 1px solid #334155; margin: 16px 0;
+  }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .header h1 { font-size: 22px; font-weight: 700; color: #ffffff; }
+  .header p { font-size: 13px; color: #94a3b8; margin-top: 2px; }
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(16, 185, 129, 0.1); padding: 6px 12px; border-radius: 999px;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+  .status-pill.offline { background: rgba(248, 113, 113, 0.1); border-color: rgba(248,113,113,0.2); }
+  .dot { width: 10px; height: 10px; background: #34d399; border-radius: 50%; animation: pulse 2s infinite; }
+  .status-pill.offline .dot { background: #f87171; animation: none; }
+  .status-pill span.label { font-size: 12px; font-weight: 600; color: #34d399; }
+  .status-pill.offline span.label { color: #f87171; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .sensor-card { background: rgba(51, 65, 85, 0.5); padding: 16px; border-radius: 16px; border: 1px solid rgba(71, 85, 105, 0.5); }
+  .sensor-card p.label { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+  .sensor-card p.value { font-size: 24px; font-weight: 700; color: #60a5fa; }
+  .sensor-card p.value.status { font-size: 18px; color: #e2e8f0; }
+  .sensor-card p.value.status.active { color: #34d399; animation: pulse 1.5s infinite; }
+
+  button#water-btn {
+    width: 100%; padding: 20px;
+    background: linear-gradient(to right, #10b981, #0d9488);
+    border: none; border-radius: 16px; font-weight: 700; font-size: 17px; color: white;
+    box-shadow: 0 10px 25px -5px rgba(6, 78, 59, 0.4);
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    cursor: pointer; transition: transform 0.15s ease, background 0.3s ease;
+  }
+  button#water-btn:active { transform: scale(0.96); }
+  button#water-btn.watering { background: linear-gradient(to right, #f43f5e, #dc2626); box-shadow: 0 10px 25px -5px rgba(136, 19, 55, 0.4); }
+  button#water-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .section-title { font-size: 14px; font-weight: 700; color: #cbd5e1; margin: 28px 0 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+  .field label { font-size: 12px; color: #94a3b8; }
+  .field select, .field input {
+    background: rgba(51, 65, 85, 0.6); border: 1px solid #475569; border-radius: 10px;
+    color: #f1f5f9; padding: 10px 12px; font-size: 14px; outline: none;
+  }
+  .field select:focus, .field input:focus { border-color: #10b981; }
+  .duration-row { display: flex; gap: 8px; align-items: center; }
+  .duration-row input { width: 100%; text-align: center; }
+  .duration-row span { font-size: 12px; color: #94a3b8; white-space: nowrap; }
+
+  button#save-btn {
+    width: 100%; padding: 14px; margin-top: 4px;
+    background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4);
+    border-radius: 12px; color: #34d399; font-weight: 700; font-size: 14px;
+    cursor: pointer; transition: background 0.2s ease;
+  }
+  button#save-btn:hover { background: rgba(16, 185, 129, 0.25); }
+  button#save-btn:active { transform: scale(0.98); }
+
+  .schedule-list { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .schedule-item {
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(51, 65, 85, 0.4); border: 1px solid rgba(71, 85, 105, 0.4);
+    border-radius: 12px; padding: 10px 14px; font-size: 13px;
+  }
+  .schedule-item .info { color: #e2e8f0; }
+  .schedule-item .info b { color: #60a5fa; }
+  .schedule-item button.delete { background: none; border: none; color: #f87171; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+  .empty-msg { font-size: 13px; color: #64748b; text-align: center; padding: 10px 0; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+</style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="header">
+      <div>
+        <h1>Pametna Bašta</h1>
+        <p>Terasa & Sistem za zalivanje</p>
+      </div>
+      <div class="status-pill offline" id="status-pill">
+        <span class="dot"></span>
+        <span class="label" id="status-label">Povezivanje...</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="sensor-card">
+        <p class="label">Vlažnost zemlje</p>
+        <p class="value" id="soil-moisture">--%</p>
+      </div>
+      <div class="sensor-card">
+        <p class="label">Status sistema</p>
+        <p class="value status" id="pump-status">U mirovanju</p>
+      </div>
+    </div>
+
+    <button id="water-btn" onclick="toggleWater()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+      <span id="btn-text">Pokreni zalivanje</span>
+    </button>
+
+    <div class="section-title">Raspored zalivanja</div>
+
+    <div class="field-row">
+      <div class="field"><label>Sat</label><select id="hour-select"></select></div>
+      <div class="field"><label>Minut</label><select id="minute-select"></select></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field full">
+        <label>Trajanje zalivanja</label>
+        <div class="duration-row">
+          <input type="number" id="duration-min" min="0" value="0">
+          <span>min</span>
+          <input type="number" id="duration-sec" min="0" max="59" value="30">
+          <span>sek</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field full">
+        <label>Učestalost</label>
+        <select id="frequency-select">
+          <option value="1">Jednom dnevno</option>
+          <option value="2">2 puta dnevno</option>
+          <option value="3">3 puta dnevno</option>
+          <option value="0.5">Svaka 2 dana</option>
+          <option value="0.333">Svaka 3 dana</option>
+          <option value="0.143">Jednom nedeljno</option>
+        </select>
+      </div>
+    </div>
+
+    <button id="save-btn" onclick="saveSchedule()">+ Dodaj raspored</button>
+
+    <div class="schedule-list" id="schedule-list">
+      <p class="empty-msg" id="empty-msg">Nema sačuvanih rasporeda</p>
+    </div>
+  </div>
+
+  <script>
     // ================= MQTT PODEŠAVANJA =================
     // JAVNI test broker - OK za probu, ali nije bezbedan za trajnu upotrebu
     // (bez lozinke, svako na svetu vidi topic ako pogodi naziv).
