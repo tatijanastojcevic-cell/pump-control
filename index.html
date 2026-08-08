@@ -1,80 +1,164 @@
-<!DOCTYPE html>
-<html lang="sr">
-<head>
-  <meta charset="UTF-8">
-  <title>ESP32 Pump Control</title>
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-</head>
-<body>
-  <h2>Kontrola pumpe</h2>
-  <button id="btnOn">Uključi</button>
-  <button id="btnOff">Isključi</button>
+<script>
+    // ================= MQTT PODEŠAVANJA =================
+    // JAVNI test broker - OK za probu, ali nije bezbedan za trajnu upotrebu
+    // (bez lozinke, svako na svetu vidi topic ako pogodi naziv).
+    const MQTT_URL = 'wss://broker.hivemq.com:8884/mqtt';
 
-  <h2>Raspored</h2>
-  <label for="time">Vreme (HH:MM):</label>
-  <input type="time" id="time" step="60" required>
-  <br>
-  <label for="duration">Trajanje (sekunde):</label>
-  <input type="number" id="duration" value="10">
-  <br>
-  <label for="interval">Interval:</label>
-  <select id="interval">
-    <option value="daily">Daily</option>
-    <option value="every2days">Every 2 days</option>
-    <option value="weekly">Weekly</option>
-  </select>
-  <br>
-  <button id="btnSchedule">Pošalji raspored</button>
+    // MORA biti IDENTIČNO kao MQTT_PREFIX u ESP32 kodu (.ino fajlu)!
+    // Promeni na nešto jedinstveno da smanjiš šansu da neko drugi pogodi topic.
+    const PREFIX = 'basta_tatijana_9f3k';
 
-  <!-- Script na kraju body -->
-  <script>
-    // MQTT konekcija
-    const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
-      reconnectPeriod: 2000
+    const topicKomanda       = PREFIX + '/pumpa/komanda';
+    const topicStatus        = PREFIX + '/pumpa/status';
+    const topicVlaznost      = PREFIX + '/vlaznost';
+    const topicRasporedDodaj = PREFIX + '/raspored/dodaj';
+    const topicRasporedObrisi= PREFIX + '/raspored/obrisi';
+    const topicRasporedLista = PREFIX + '/raspored/lista';
+
+    const frequencyLabels = {
+      "1": "Jednom dnevno", "2": "2 puta dnevno", "3": "3 puta dnevno",
+      "0.5": "Svaka 2 dana", "0.333": "Svaka 3 dana", "0.143": "Jednom nedeljno"
+    };
+
+    let pumpaTrenutnoRadi = false;
+
+    const client = mqtt.connect(MQTT_URL, {
+      clientId: 'web_' + Math.random().toString(16).slice(2)
     });
 
-    client.on("connect", () => {
-      console.log("✅ MQTT povezan!");
+    client.on('connect', () => {
+      postaviOnlineStatus(true);
+      client.subscribe([topicStatus, topicVlaznost, topicRasporedLista]);
+    });
+    client.on('reconnect', () => postaviOnlineStatus(false));
+    client.on('close', () => postaviOnlineStatus(false));
+    client.on('offline', () => postaviOnlineStatus(false));
+
+    client.on('message', (topic, poruka) => {
+      const tekst = poruka.toString();
+      if (topic === topicStatus) {
+        primeniStatusPumpe(tekst === 'ON');
+      } else if (topic === topicVlaznost) {
+        document.getElementById('soil-moisture').innerText = tekst + '%';
+      } else if (topic === topicRasporedLista) {
+        try {
+          prikaziRasporede(JSON.parse(tekst));
+        } catch (e) { /* ignorisi neispravan JSON */ }
+      }
     });
 
-    // Funkcije moraju biti globalne
-    function pumpOn() {
-      client.publish("tatijana/pump/control", "ON");
+    function postaviOnlineStatus(online) {
+      const pill = document.getElementById('status-pill');
+      const label = document.getElementById('status-label');
+      if (online) {
+        pill.classList.remove('offline');
+        label.innerText = 'Online';
+      } else {
+        pill.classList.add('offline');
+        label.innerText = 'Offline';
+      }
     }
 
-    function pumpOff() {
-      client.publish("tatijana/pump/control", "OFF");
+    // ---------- Ručno zalivanje (start/stop preko istog dugmeta) ----------
+    function toggleWater() {
+      const komanda = pumpaTrenutnoRadi ? 'OFF' : 'ON';
+      client.publish(topicKomanda, komanda);
+      // UI će se ažurirati kad ESP potvrdi preko topicStatus, ali menjamo odmah
+      // radi osećaja brzog odziva; ESP je izvor istine.
+      primeniStatusPumpe(komanda === 'ON');
     }
 
-    function setSchedule() {
-      const timeValue = document.getElementById("time").value; // npr. "16:11"
-      if (!timeValue) {
-        alert("⚠️ Morate uneti vreme!");
+    function primeniStatusPumpe(radi) {
+      pumpaTrenutnoRadi = radi;
+      const btn = document.getElementById('water-btn');
+      const btnText = document.getElementById('btn-text');
+      const statusText = document.getElementById('pump-status');
+      if (radi) {
+        btn.classList.add('watering');
+        btnText.innerText = "Zaustavi zalivanje";
+        statusText.innerText = "Zalivanje u toku...";
+        statusText.classList.add('active');
+      } else {
+        btn.classList.remove('watering');
+        btnText.innerText = "Pokreni zalivanje";
+        statusText.innerText = "U mirovanju";
+        statusText.classList.remove('active');
+      }
+    }
+
+    // ---------- Sat/minut selektori ----------
+    const hourSelect = document.getElementById('hour-select');
+    const minuteSelect = document.getElementById('minute-select');
+    for (let h = 0; h < 24; h++) {
+      const opt = document.createElement('option');
+      opt.value = h; opt.textContent = String(h).padStart(2, '0');
+      hourSelect.appendChild(opt);
+    }
+    for (let m = 0; m < 60; m++) {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = String(m).padStart(2, '0');
+      minuteSelect.appendChild(opt);
+    }
+    hourSelect.value = 7;
+    minuteSelect.value = 0;
+
+    // ---------- Trajanje: sekunde preko 60 prelaze u minute ----------
+    const durationMinInput = document.getElementById('duration-min');
+    const durationSecInput = document.getElementById('duration-sec');
+    durationSecInput.addEventListener('change', () => {
+      let sec = parseInt(durationSecInput.value) || 0;
+      let min = parseInt(durationMinInput.value) || 0;
+      if (sec >= 60) {
+        min += Math.floor(sec / 60);
+        sec = sec % 60;
+        durationMinInput.value = min;
+        durationSecInput.value = sec;
+      }
+      if (sec < 0) durationSecInput.value = 0;
+    });
+
+    // ---------- Čuvanje / brisanje rasporeda preko MQTT ----------
+    function saveSchedule() {
+      const hour = parseInt(hourSelect.value);
+      const minute = parseInt(minuteSelect.value);
+      const min = parseInt(durationMinInput.value) || 0;
+      const sec = parseInt(durationSecInput.value) || 0;
+      const trajanjeSek = min * 60 + sec;
+      const ucestalostDana = parseFloat(document.getElementById('frequency-select').value);
+
+      client.publish(topicRasporedDodaj, JSON.stringify({ hour, minute, trajanjeSek, ucestalostDana }));
+      // ESP će posle dodavanja objaviti ažuriranu listu na topicRasporedLista
+    }
+
+    function obrisiRaspored(idx) {
+      client.publish(topicRasporedObrisi, String(idx));
+    }
+
+    function prikaziRasporede(data) {
+      const list = document.getElementById('schedule-list');
+      list.innerHTML = '';
+      if (!data || data.length === 0) {
+        list.innerHTML = '<p class="empty-msg">Nema sačuvanih rasporeda</p>';
         return;
       }
+      data.forEach((s, idx) => {
+        let trajanjeText = '';
+        const m = Math.floor(s.trajanjeSek / 60);
+        const sc = s.trajanjeSek % 60;
+        if (m > 0) trajanjeText += m + ' min ';
+        if (sc > 0 || m === 0) trajanjeText += sc + ' sek';
 
-      const parts = timeValue.split(":");
-      const hour = parseInt(parts[0], 10);
-      const minute = parseInt(parts[1], 10);
-      const duration = parseInt(document.getElementById("duration").value, 10);
-      const interval = document.getElementById("interval").value;
+        const freqLabel = frequencyLabels[String(s.ucestalostDana)] || (s.ucestalostDana + '/dan');
 
-      const scheduleMsg = JSON.stringify({
-        hour: hour,
-        minute: minute,
-        duration: duration,
-        interval: interval
+        const item = document.createElement('div');
+        item.className = 'schedule-item';
+        item.innerHTML = `
+          <span class="info"><b>${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</b> · ${trajanjeText.trim()} · ${freqLabel}</span>
+          <button class="delete" onclick="obrisiRaspored(${idx})">✕</button>
+        `;
+        list.appendChild(item);
       });
-
-      console.log("📤 Šaljem raspored:", scheduleMsg);
-      client.publish("tatijana/pump/schedule", scheduleMsg);
-      alert("✅ Raspored poslat ESP32-u!");
     }
-
-    // Dodaj event listenere na dugmad
-    document.getElementById("btnOn").addEventListener("click", pumpOn);
-    document.getElementById("btnOff").addEventListener("click", pumpOff);
-    document.getElementById("btnSchedule").addEventListener("click", setSchedule);
   </script>
 </body>
 </html>
