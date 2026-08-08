@@ -7,8 +7,8 @@
 </head>
 <body>
   <h2>Kontrola pumpe</h2>
-  <button onclick="pumpOn()">Uključi</button>
-  <button onclick="pumpOff()">Isključi</button>
+  <button id="btnOn">Uključi</button>
+  <button id="btnOff">Isključi</button>
 
   <h2>Raspored</h2>
   <label for="time">Vreme (HH:MM):</label>
@@ -24,8 +24,9 @@
     <option value="weekly">Weekly</option>
   </select>
   <br>
-  <button onclick="setSchedule()">Pošalji raspored</button>
+  <button id="btnSchedule">Pošalji raspored</button>
 
+  <!-- Script na kraju body -->
   <script>
     // MQTT konekcija
     const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
@@ -36,6 +37,7 @@
       console.log("✅ MQTT povezan!");
     });
 
+    // Funkcije moraju biti globalne
     function pumpOn() {
       client.publish("tatijana/pump/control", "ON");
     }
@@ -68,6 +70,11 @@
       client.publish("tatijana/pump/schedule", scheduleMsg);
       alert("✅ Raspored poslat ESP32-u!");
     }
+
+    // Dodaj event listenere na dugmad
+    document.getElementById("btnOn").addEventListener("click", pumpOn);
+    document.getElementById("btnOff").addEventListener("click", pumpOff);
+    document.getElementById("btnSchedule").addEventListener("click", setSchedule);
   </script>
 </body>
 </html>
