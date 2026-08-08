@@ -12,7 +12,7 @@
   <button onclick="mqttPublish('OFF')">Isključi pumpu</button>
 
   <script>
-    // koristi WSS (sigurni WebSocket) jer je stranica na HTTPS
+    // koristi WSS jer je stranica na HTTPS
     const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
     client.on("connect", () => {
