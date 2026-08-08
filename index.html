@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Zalivanje biljaka</title>
+  <!-- prvo učitavamo MQTT biblioteku -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body { font-family: 'Segoe UI', Arial; background-color: #f0fff0; color: #1a5c30; text-align: center; margin: 0; padding: 20px; }
@@ -52,6 +53,7 @@
   </div>
 
   <script>
+    // MQTT konekcija (WSS jer je stranica na HTTPS)
     const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
     client.on("connect", () => {
@@ -107,3 +109,4 @@
   </script>
 </body>
 </html>
+
