@@ -7,14 +7,23 @@
 </head>
 <body>
   <h1>Kontrola pumpe</h1>
+  <p id="status">Status pumpe: Nepoznato</p>
   <button onclick="mqttPublish('ON')">Uključi pumpu</button>
   <button onclick="mqttPublish('OFF')">Isključi pumpu</button>
 
   <script>
-    const client = mqtt.connect("ws://broker.hivemq.com:8000/mqtt");
+    // koristi WSS (sigurni WebSocket) jer je stranica na HTTPS
+    const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
     client.on("connect", () => {
       console.log("MQTT povezan");
+      client.subscribe("tatijana/pump/status");
+    });
+
+    client.on("message", (topic, message) => {
+      if (topic === "tatijana/pump/status") {
+        document.getElementById("status").innerText = "Status pumpe: " + message.toString();
+      }
     });
 
     function mqttPublish(msg) {
