@@ -11,8 +11,8 @@
   <button onclick="pumpOff()">Isključi</button>
 
   <h2>Raspored</h2>
-  <label for="time">Vreme:</label>
-  <input type="time" id="time" required>
+  <label for="time">Vreme (HH:MM):</label>
+  <input type="time" id="time" step="60" required>
   <br>
   <label for="duration">Trajanje (sekunde):</label>
   <input type="number" id="duration" value="10">
@@ -27,3 +27,47 @@
   <button onclick="setSchedule()">Pošalji raspored</button>
 
   <script>
+    // MQTT konekcija
+    const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", {
+      reconnectPeriod: 2000
+    });
+
+    client.on("connect", () => {
+      console.log("✅ MQTT povezan!");
+    });
+
+    function pumpOn() {
+      client.publish("tatijana/pump/control", "ON");
+    }
+
+    function pumpOff() {
+      client.publish("tatijana/pump/control", "OFF");
+    }
+
+    function setSchedule() {
+      const timeValue = document.getElementById("time").value; // npr. "16:11"
+      if (!timeValue) {
+        alert("⚠️ Morate uneti vreme!");
+        return;
+      }
+
+      const parts = timeValue.split(":");
+      const hour = parseInt(parts[0], 10);
+      const minute = parseInt(parts[1], 10);
+      const duration = parseInt(document.getElementById("duration").value, 10);
+      const interval = document.getElementById("interval").value;
+
+      const scheduleMsg = JSON.stringify({
+        hour: hour,
+        minute: minute,
+        duration: duration,
+        interval: interval
+      });
+
+      console.log("📤 Šaljem raspored:", scheduleMsg);
+      client.publish("tatijana/pump/schedule", scheduleMsg);
+      alert("✅ Raspored poslat ESP32-u!");
+    }
+  </script>
+</body>
+</html>
