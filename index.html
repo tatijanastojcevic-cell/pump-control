@@ -1,18 +1,50 @@
 <!DOCTYPE html>
-<html>
+<html lang="sr">
 <head>
   <meta charset="UTF-8">
-  <title>Pumpa kontrola</title>
+  <title>Zalivanje biljaka</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Arial; background-color: #f0fff0; color: #1a5c30; text-align: center; margin: 0; padding: 20px; }
+    h1 { color: #2e7d32; }
+    .card { background: white; border-radius: 10px; padding: 20px; margin: 20px auto; width: 90%; max-width: 400px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    button { font-size: 1.1em; padding: 12px 24px; margin: 10px; border: none; border-radius: 6px; cursor: pointer; }
+    button.on { background-color: #4caf50; color: white; }
+    button.off { background-color: #f44336; color: white; }
+    input, select { font-size: 1em; padding: 8px; margin: 5px; border-radius: 6px; border: 1px solid #ccc; }
+    .status { font-size: 1.2em; font-weight: bold; margin-top: 10px; }
+    .status.on { color: #4caf50; }
+    .status.off { color: #f44336; }
+  </style>
 </head>
 <body>
-  <h1>Kontrola pumpe</h1>
-  <p id="status">Status pumpe: Nepoznato</p>
-  <button onclick="mqttPublish('ON')">Uključi pumpu</button>
-  <button onclick="mqttPublish('OFF')">Isključi pumpu</button>
+  <h1>🌿 Zalivanje biljaka</h1>
+
+  <div class="card">
+    <h2>Ručno upravljanje</h2>
+    <button class="on" onclick="mqttPublish('ON')">Uključi pumpu</button>
+    <button class="off" onclick="mqttPublish('OFF')">Isključi pumpu</button>
+    <p id="status" class="status">Status pumpe: Nepoznato</p>
+  </div>
+
+  <div class="card">
+    <h2>Raspored zalivanja</h2>
+    <form onsubmit="setSchedule(); return false;">
+      <label>Sat: <input type="number" id="hour" min="0" max="23" required></label>
+      <label>Minut: <input type="number" id="minute" min="0" max="59" required></label><br>
+      <label>Trajanje (sekunde): <input type="number" id="duration" min="1" required></label><br>
+      <label>Interval:
+        <select id="interval">
+          <option value="daily">Svaki dan</option>
+          <option value="every2days">Svakih 2 dana</option>
+          <option value="weekly">Jednom nedeljno</option>
+        </select>
+      </label><br>
+      <button type="submit" class="on">Sačuvaj raspored</button>
+    </form>
+  </div>
 
   <script>
-    // koristi WSS jer je stranica na HTTPS
     const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
     client.on("connect", () => {
@@ -22,13 +54,33 @@
 
     client.on("message", (topic, message) => {
       if (topic === "tatijana/pump/status") {
-        document.getElementById("status").innerText = "Status pumpe: " + message.toString();
+        const msg = message.toString();
+        const statusEl = document.getElementById("status");
+        statusEl.innerText = "Status pumpe: " + msg;
+        statusEl.className = "status " + (msg === "Radi" ? "on" : "off");
       }
     });
 
     function mqttPublish(msg) {
       client.publish("tatijana/pump/control", msg);
       console.log("Poslato: " + msg);
+    }
+
+    function setSchedule() {
+      const hour = document.getElementById("hour").value;
+      const minute = document.getElementById("minute").value;
+      const duration = document.getElementById("duration").value;
+      const interval = document.getElementById("interval").value;
+
+      const scheduleMsg = JSON.stringify({
+        hour: parseInt(hour),
+        minute: parseInt(minute),
+        duration: parseInt(duration),
+        interval: interval
+      });
+
+      client.publish("tatijana/pump/schedule", scheduleMsg);
+      alert("Raspored poslat ESP32-u!");
     }
   </script>
 </body>
