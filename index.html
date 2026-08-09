@@ -4,25 +4,102 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pametna Bašta - Kontrola Zalivanja</title>
-  <!-- Ispravan MQTT JS -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    body { background:#0f172a; color:#f1f5f9; font-family:sans-serif; padding:20px; }
-    .card { max-width:420px; margin:auto; background:#1e293b; padding:20px; border-radius:16px; }
-    .status-pill { display:flex; align-items:center; gap:8px; margin-bottom:20px; }
-    .status-pill.offline span { color:#f87171; }
-    .status-pill.online span { color:#34d399; }
-    button { padding:12px; margin-top:10px; width:100%; border:none; border-radius:8px; cursor:pointer; }
-    #water-btn { background:#10b981; color:white; font-weight:bold; }
-    #water-btn.watering { background:#dc2626; }
-    .field { margin-bottom:12px; }
-    .schedule-item { background:#334155; padding:8px; border-radius:8px; margin-top:6px; display:flex; justify-content:space-between; }
-    .delete { background:none; border:none; color:#f87171; cursor:pointer; }
+    body {
+      background: #0b1221;
+      color: #e2e8f0;
+      font-family: "Inter", sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .card {
+      background: #111827;
+      border-radius: 20px;
+      padding: 30px;
+      width: 380px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.4);
+    }
+
+    h2 {
+      color: #f8fafc;
+      margin-bottom: 4px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #1e293b;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .status-pill.online span {
+      color: #10b981;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    #water-btn {
+      background: #10b981;
+      color: white;
+      width: 100%;
+      margin: 10px 0 20px 0;
+    }
+
+    #water-btn.watering {
+      background: #ef4444;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    select, input {
+      background: #1e293b;
+      color: #f1f5f9;
+      border: none;
+      border-radius: 8px;
+      padding: 8px;
+      width: 100%;
+    }
+
+    .schedule-item {
+      background: #1e293b;
+      padding: 10px;
+      border-radius: 10px;
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .delete {
+      background: none;
+      border: none;
+      color: #f87171;
+      font-size: 18px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>Pametna Bašta</h2>
+    <p>Terasa & Sistem za zalivanje</p>
     <div class="status-pill offline" id="status-pill"><span id="status-label">Offline</span></div>
 
     <p>Status pumpe: <span id="pump-status">U mirovanju</span></p>
@@ -63,7 +140,7 @@
     const topicStatus        = PREFIX + '/pumpa/status';
     const topicRasporedDodaj = PREFIX + '/raspored/dodaj';
     const topicRasporedLista = PREFIX + '/raspored/lista';
-    const topicRasporedObrisi= PREFIX + '/raspored/obrisi';
+    const topicRasporedUkloni= PREFIX + '/raspored/ukloni';
 
     let pumpaRadi = false;
 
@@ -137,11 +214,13 @@
         return;
       }
       data.forEach((s, idx) => {
-        const item = document.createElement('div');
-        item.className = 'schedule-item';
-        item.innerHTML = `<span><b>${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</b> · ${s.trajanjeSek}s · ${s.ucestalostDana}/dan</span>
-                          <button class="delete" onclick="client.publish('${topicRasporedObrisi}', '${idx}')">✕</button>`;
-        list.appendChild(item);
+        if (s.aktivan !== false) {
+          const item = document.createElement('div');
+          item.className = 'schedule-item';
+          item.innerHTML = `<span><b>${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</b> · ${s.trajanjeSek}s · ${s.ucestalostDana}/dan</span>
+                            <button class="delete" onclick="client.publish('${topicRasporedUkloni}', '${idx}')">✕</button>`;
+          list.appendChild(item);
+        }
       });
     }
   </script>
