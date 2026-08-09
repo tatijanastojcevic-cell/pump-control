@@ -1,119 +1,150 @@
 <!DOCTYPE html>
-<html>
+<html lang="sr">
 <head>
-  <meta charset="utf-8">
-  <title>Basta Tatijana</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pametna Bašta - Kontrola Zalivanja</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    body {
-      font-family: "Segoe UI", sans-serif;
-      background-color: #f7f9f5;
-      color: #333;
-      margin: 40px;
-    }
-    h2 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 30px;
-      color: #2e7d32;
-    }
-    button {
-      background-color: #4caf50;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      padding: 6px 12px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-    button:hover {
-      background-color: #388e3c;
-    }
-    input {
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      padding: 4px 6px;
-      margin-right: 6px;
-    }
-    .raspored {
-      background-color: #fff;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 8px 12px;
-      margin: 6px 0;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .ukloni {
-      background-color: #e53935;
-      margin-left: 10px;
-    }
-    .ukloni:hover {
-      background-color: #c62828;
-    }
+    body { background:#0f172a; color:#f1f5f9; font-family:sans-serif; padding:20px; }
+    .card { max-width:420px; margin:auto; background:#1e293b; padding:20px; border-radius:16px; }
+    .status-pill { display:flex; align-items:center; gap:8px; margin-bottom:20px; }
+    .status-pill.offline span { color:#f87171; }
+    .status-pill.online span { color:#34d399; }
+    button { padding:12px; margin-top:10px; width:100%; border:none; border-radius:8px; cursor:pointer; }
+    #water-btn { background:#10b981; color:white; font-weight:bold; }
+    #water-btn.watering { background:#dc2626; }
+    .field { margin-bottom:12px; }
+    .schedule-item { background:#334155; padding:8px; border-radius:8px; margin-top:6px; display:flex; justify-content:space-between; }
+    .delete { background:none; border:none; color:#f87171; cursor:pointer; }
   </style>
 </head>
 <body>
-  <h2>🌿 Kontrola pumpe</h2>
-  <button onclick="client.publish('basta_tatijana_9f3k/pumpa/komanda','ON')">ON</button>
-  <button class="ukloni" onclick="client.publish('basta_tatijana_9f3k/pumpa/komanda','OFF')">OFF</button>
-  <p>Status pumpe: <span id="status">?</span></p>
+  <div class="card">
+    <h2>Pametna Bašta</h2>
+    <div class="status-pill offline" id="status-pill"><span id="status-label">Offline</span></div>
 
-  <h2>📅 Dodaj raspored</h2>
-  Sat: <input id="hour" type="number" min="0" max="23">
-  Minut: <input id="minute" type="number" min="0" max="59">
-  Trajanje (sekunde): <input id="trajanje" type="number" min="1">
-  <button onclick="dodajRaspored()">Dodaj</button>
+    <p>Status pumpe: <span id="pump-status">U mirovanju</span></p>
+    <button id="water-btn" onclick="toggleWater()">Pokreni zalivanje</button>
 
-  <h2>🗒️ Lista rasporeda</h2>
-  <div id="rasporedLista"></div>
+    <h3>Raspored</h3>
+    <div class="field">
+      <label>Sat:</label>
+      <select id="hour-select"></select>
+    </div>
+    <div class="field">
+      <label>Minut:</label>
+      <select id="minute-select"></select>
+    </div>
+    <div class="field">
+      <label>Trajanje (sekunde):</label>
+      <input type="number" id="duration-sec" value="30">
+    </div>
+    <div class="field">
+      <label>Učestalost:</label>
+      <select id="frequency-select">
+        <option value="1">Jednom dnevno</option>
+        <option value="0.5">Svaka 2 dana</option>
+        <option value="0.333">Svaka 3 dana</option>
+        <option value="0.143">Jednom nedeljno</option>
+      </select>
+    </div>
+    <button onclick="saveSchedule()">+ Dodaj raspored</button>
 
-<script>
-  const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+    <div id="schedule-list"><p>Nema sačuvanih rasporeda</p></div>
+  </div>
 
-  client.on("connect", function() {
-    console.log("✅ Povezan na MQTT broker");
-    client.subscribe("basta_tatijana_9f3k/pumpa/status");
-    client.subscribe("basta_tatijana_9f3k/raspored/lista");
-  });
+  <script>
+    const MQTT_URL = 'wss://broker.hivemq.com:8884/mqtt';
+    const PREFIX = 'basta_tatijana_9f3k';
 
-  client.on("message", function(topic, message) {
-    if (topic === "basta_tatijana_9f3k/pumpa/status") {
-      document.getElementById("status").innerText = message.toString();
+    const topicKomanda       = PREFIX + '/pumpa/komanda';
+    const topicStatus        = PREFIX + '/pumpa/status';
+    const topicRasporedDodaj = PREFIX + '/raspored/dodaj';
+    const topicRasporedLista = PREFIX + '/raspored/lista';
+    const topicRasporedUkloni= PREFIX + '/raspored/ukloni'; // usklađeno ime
+
+    let pumpaRadi = false;
+
+    const client = mqtt.connect(MQTT_URL, { clientId: 'web_' + Math.random().toString(16).slice(2) });
+
+    client.on('connect', () => {
+      document.getElementById('status-pill').classList.remove('offline');
+      document.getElementById('status-pill').classList.add('online');
+      document.getElementById('status-label').innerText = 'Online';
+      client.subscribe([topicStatus, topicRasporedLista]);
+    });
+
+    client.on('message', (topic, message) => {
+      const tekst = message.toString();
+      if (topic === topicStatus) {
+        primeniStatusPumpe(tekst === 'ON');
+      } else if (topic === topicRasporedLista) {
+        prikaziRasporede(JSON.parse(tekst));
+      }
+    });
+
+    function toggleWater() {
+      const komanda = pumpaRadi ? 'OFF' : 'ON';
+      client.publish(topicKomanda, komanda);
+      primeniStatusPumpe(komanda === 'ON');
     }
 
-    if (topic === "basta_tatijana_9f3k/raspored/lista") {
-      let lista = JSON.parse(message.toString());
-      let html = "";
-      lista.forEach((r, i) => {
-        if (r.aktivan !== false) {
-          html += `<div class="raspored">
-            ⏰ <b>${r.hour}:${r.minute}</b> — trajanje <b>${r.trajanjeSek}s</b>
-            <button class="ukloni" onclick="ukloniRaspored(${i})">Ukloni</button>
-          </div>`;
+    function primeniStatusPumpe(radi) {
+      pumpaRadi = radi;
+      const btn = document.getElementById('water-btn');
+      const statusText = document.getElementById('pump-status');
+      if (radi) {
+        btn.classList.add('watering');
+        btn.innerText = "Zaustavi zalivanje";
+        statusText.innerText = "Radi";
+      } else {
+        btn.classList.remove('watering');
+        btn.innerText = "Pokreni zalivanje";
+        statusText.innerText = "U mirovanju";
+      }
+    }
+
+    // popuni dropdown
+    const hourSelect = document.getElementById('hour-select');
+    const minuteSelect = document.getElementById('minute-select');
+    for (let h = 0; h < 24; h++) {
+      const opt = document.createElement('option');
+      opt.value = h; opt.textContent = String(h).padStart(2,'0');
+      hourSelect.appendChild(opt);
+    }
+    for (let m = 0; m < 60; m++) {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = String(m).padStart(2,'0');
+      minuteSelect.appendChild(opt);
+    }
+
+    function saveSchedule() {
+      const hour = parseInt(hourSelect.value);
+      const minute = parseInt(minuteSelect.value);
+      const trajanjeSek = parseInt(document.getElementById('duration-sec').value);
+      const ucestalostDana = parseFloat(document.getElementById('frequency-select').value);
+
+      client.publish(topicRasporedDodaj, JSON.stringify({ hour, minute, trajanjeSek, ucestalostDana }));
+    }
+
+    function prikaziRasporede(data) {
+      const list = document.getElementById('schedule-list');
+      list.innerHTML = '';
+      if (!data || data.length === 0) {
+        list.innerHTML = '<p>Nema sačuvanih rasporeda</p>';
+        return;
+      }
+      data.forEach((s, idx) => {
+        if (s.aktivan !== false) {
+          const item = document.createElement('div');
+          item.className = 'schedule-item';
+          item.innerHTML = `<span><b>${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</b> · ${s.trajanjeSek}s · ${s.ucestalostDana}/dan</span>
+                            <button class="delete" onclick="client.publish('${topicRasporedUkloni}', '${idx}')">✕</button>`;
+          list.appendChild(item);
         }
       });
-      document.getElementById("rasporedLista").innerHTML = html;
     }
-  });
-
-  function dodajRaspored() {
-    let h = document.getElementById("hour").value;
-    let m = document.getElementById("minute").value;
-    let t = document.getElementById("trajanje").value;
-
-    let raspored = {
-      hour: parseInt(h),
-      minute: parseInt(m),
-      trajanjeSek: parseInt(t)
-    };
-
-    client.publish("basta_tatijana_9f3k/raspored/dodaj", JSON.stringify(raspored));
-  }
-
-  function ukloniRaspored(index) {
-    client.publish("basta_tatijana_9f3k/raspored/ukloni", String(index));
-  }
-</script>
+  </script>
 </body>
 </html>
