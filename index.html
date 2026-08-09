@@ -5,16 +5,58 @@
   <title>Basta Tatijana</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    body { font-family: Arial; margin: 20px; }
-    h2 { margin-top: 30px; }
-    button { margin: 5px; padding: 5px 10px; }
-    .raspored { margin: 5px 0; padding: 5px; border: 1px solid #ccc; border-radius: 5px; }
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background-color: #f7f9f5;
+      color: #333;
+      margin: 40px;
+    }
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 30px;
+      color: #2e7d32;
+    }
+    button {
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover {
+      background-color: #388e3c;
+    }
+    input {
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 4px 6px;
+      margin-right: 6px;
+    }
+    .raspored {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin: 6px 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .ukloni {
+      background-color: #e53935;
+      margin-left: 10px;
+    }
+    .ukloni:hover {
+      background-color: #c62828;
+    }
   </style>
 </head>
 <body>
   <h2>🌿 Kontrola pumpe</h2>
   <button onclick="client.publish('basta_tatijana_9f3k/pumpa/komanda','ON')">ON</button>
-  <button onclick="client.publish('basta_tatijana_9f3k/pumpa/komanda','OFF')">OFF</button>
+  <button class="ukloni" onclick="client.publish('basta_tatijana_9f3k/pumpa/komanda','OFF')">OFF</button>
   <p>Status pumpe: <span id="status">?</span></p>
 
   <h2>📅 Dodaj raspored</h2>
@@ -23,7 +65,7 @@
   Trajanje (sekunde): <input id="trajanje" type="number" min="1">
   <button onclick="dodajRaspored()">Dodaj</button>
 
-  <h2>📋 Lista rasporeda</h2>
+  <h2>🗒️ Lista rasporeda</h2>
   <div id="rasporedLista"></div>
 
 <script>
@@ -46,8 +88,8 @@
       lista.forEach((r, i) => {
         if (r.aktivan !== false) {
           html += `<div class="raspored">
-            ⏰ ${r.hour}:${r.minute}, trajanje ${r.trajanjeSek}s
-            <button onclick="ukloniRaspored(${i})">Ukloni</button>
+            ⏰ <b>${r.hour}:${r.minute}</b> — trajanje <b>${r.trajanjeSek}s</b>
+            <button class="ukloni" onclick="ukloniRaspored(${i})">Ukloni</button>
           </div>`;
         }
       });
