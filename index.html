@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pametna Bašta - Kontrola Zalivanja</title>
+  <!-- Ispravan MQTT JS -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body { background:#0f172a; color:#f1f5f9; font-family:sans-serif; padding:20px; }
@@ -62,7 +63,7 @@
     const topicStatus        = PREFIX + '/pumpa/status';
     const topicRasporedDodaj = PREFIX + '/raspored/dodaj';
     const topicRasporedLista = PREFIX + '/raspored/lista';
-    const topicRasporedUkloni= PREFIX + '/raspored/ukloni'; // usklađeno ime
+    const topicRasporedObrisi= PREFIX + '/raspored/obrisi';
 
     let pumpaRadi = false;
 
@@ -136,13 +137,11 @@
         return;
       }
       data.forEach((s, idx) => {
-        if (s.aktivan !== false) {
-          const item = document.createElement('div');
-          item.className = 'schedule-item';
-          item.innerHTML = `<span><b>${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</b> · ${s.trajanjeSek}s · ${s.ucestalostDana}/dan</span>
-                            <button class="delete" onclick="client.publish('${topicRasporedUkloni}', '${idx}')">✕</button>`;
-          list.appendChild(item);
-        }
+        const item = document.createElement('div');
+        item.className = 'schedule-item';
+        item.innerHTML = `<span><b>${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</b> · ${s.trajanjeSek}s · ${s.ucestalostDana}/dan</span>
+                          <button class="delete" onclick="client.publish('${topicRasporedObrisi}', '${idx}')">✕</button>`;
+        list.appendChild(item);
       });
     }
   </script>
