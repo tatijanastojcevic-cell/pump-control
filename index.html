@@ -215,7 +215,12 @@
       if (topic === topicStatus) {
         primeniStatusPumpe(tekst === 'ON');
       } else if (topic === topicRasporedLista) {
-        prikaziRasporede(JSON.parse(tekst));
+        try {
+          const data = JSON.parse(tekst);
+          prikaziRasporede(data);
+        } catch(e) {
+          console.error("Greška u parsiranju rasporeda:", e, tekst);
+        }
       } else if (topic === topicVlaznost) {
         document.getElementById('soil-moisture').innerText = tekst + '%';
       }
@@ -252,10 +257,4 @@
     for (let m = 0; m < 60; m++) {
       const opt = document.createElement('option');
       opt.value = m; opt.textContent = String(m).padStart(2,'0');
-      minuteSelect.appendChild(opt);
-    }
-
-    function saveSchedule() {
-      const hour = parseInt(hourSelect.value);
-      const minute = parseInt(minuteSelect.value);
-      const trajanjeSek = parseInt(document.getElementBy
+      minuteSelect.append
