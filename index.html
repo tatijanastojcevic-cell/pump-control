@@ -4,42 +4,175 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pametna Bašta - Kontrola Zalivanja</title>
-  <!-- Ispravan MQTT JS -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    body { background:#0f172a; color:#f1f5f9; font-family:sans-serif; padding:20px; }
-    .card { max-width:420px; margin:auto; background:#1e293b; padding:20px; border-radius:16px; }
-    .status-pill { display:flex; align-items:center; gap:8px; margin-bottom:20px; }
-    .status-pill.offline span { color:#f87171; }
-    .status-pill.online span { color:#34d399; }
-    button { padding:12px; margin-top:10px; width:100%; border:none; border-radius:8px; cursor:pointer; }
-    #water-btn { background:#10b981; color:white; font-weight:bold; }
-    #water-btn.watering { background:#dc2626; }
-    .field { margin-bottom:12px; }
-    .schedule-item { background:#334155; padding:8px; border-radius:8px; margin-top:6px; display:flex; justify-content:space-between; }
-    .delete { background:none; border:none; color:#f87171; cursor:pointer; }
+    body {
+      background: #0b1221;
+      color: #e2e8f0;
+      font-family: "Inter", sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .card {
+      background: #111827;
+      border-radius: 20px;
+      padding: 30px;
+      width: 420px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.5);
+    }
+
+    h2 {
+      color: #f8fafc;
+      margin-bottom: 4px;
+    }
+
+    p.subtitle {
+      color: #94a3b8;
+      margin-top: -6px;
+      margin-bottom: 20px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #1e293b;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .status-pill.online span {
+      color: #10b981;
+    }
+
+    .status-blocks {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .status-box {
+      flex: 1;
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .status-box p {
+      margin: 0;
+      font-size: 14px;
+      color: #94a3b8;
+    }
+
+    .status-box h3 {
+      margin: 4px 0;
+      color: #f8fafc;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    #water-btn {
+      background: #10b981;
+      color: white;
+      width: 100%;
+      margin: 10px 0 20px 0;
+      font-size: 16px;
+    }
+
+    #water-btn.watering {
+      background: #ef4444;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    select, input {
+      background: #1e293b;
+      color: #f1f5f9;
+      border: none;
+      border-radius: 8px;
+      padding: 8px;
+      width: 100%;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .schedule-item {
+      background: #1e293b;
+      padding: 10px;
+      border-radius: 10px;
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .delete {
+      background: none;
+      border: none;
+      color: #f87171;
+      font-size: 18px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>Pametna Bašta</h2>
+    <p class="subtitle">Terasa & Sistem za zalivanje</p>
+
     <div class="status-pill offline" id="status-pill"><span id="status-label">Offline</span></div>
 
-    <p>Status pumpe: <span id="pump-status">U mirovanju</span></p>
+    <div class="status-blocks">
+      <div class="status-box">
+        <p>Vlažnost zemlje</p>
+        <h3 id="soil-moisture">--%</h3>
+      </div>
+      <div class="status-box">
+        <p>Status sistema</p>
+        <h3 id="pump-status">U mirovanju</h3>
+      </div>
+    </div>
+
     <button id="water-btn" onclick="toggleWater()">Pokreni zalivanje</button>
 
-    <h3>Raspored</h3>
-    <div class="field">
-      <label>Sat:</label>
-      <select id="hour-select"></select>
+    <h3>Raspored zalivanja</h3>
+    <div class="field row">
+      <div style="flex:1;">
+        <label>Sat:</label>
+        <select id="hour-select"></select>
+      </div>
+      <div style="flex:1;">
+        <label>Minut:</label>
+        <select id="minute-select"></select>
+      </div>
     </div>
-    <div class="field">
-      <label>Minut:</label>
-      <select id="minute-select"></select>
-    </div>
-    <div class="field">
-      <label>Trajanje (sekunde):</label>
-      <input type="number" id="duration-sec" value="30">
+    <div class="field row">
+      <div style="flex:1;">
+        <label>Trajanje (min):</label>
+        <input type="number" id="duration-min" value="0">
+      </div>
+      <div style="flex:1;">
+        <label>Trajanje (sek):</label>
+        <input type="number" id="duration-sec" value="30">
+      </div>
     </div>
     <div class="field">
       <label>Učestalost:</label>
@@ -63,7 +196,8 @@
     const topicStatus        = PREFIX + '/pumpa/status';
     const topicRasporedDodaj = PREFIX + '/raspored/dodaj';
     const topicRasporedLista = PREFIX + '/raspored/lista';
-    const topicRasporedObrisi= PREFIX + '/raspored/obrisi';
+    const topicRasporedUkloni= PREFIX + '/raspored/ukloni';
+    const topicVlaznost      = PREFIX + '/vlaznost';
 
     let pumpaRadi = false;
 
@@ -73,7 +207,7 @@
       document.getElementById('status-pill').classList.remove('offline');
       document.getElementById('status-pill').classList.add('online');
       document.getElementById('status-label').innerText = 'Online';
-      client.subscribe([topicStatus, topicRasporedLista]);
+      client.subscribe([topicStatus, topicRasporedLista, topicVlaznost]);
     });
 
     client.on('message', (topic, message) => {
@@ -82,6 +216,8 @@
         primeniStatusPumpe(tekst === 'ON');
       } else if (topic === topicRasporedLista) {
         prikaziRasporede(JSON.parse(tekst));
+      } else if (topic === topicVlaznost) {
+        document.getElementById('soil-moisture').innerText = tekst + '%';
       }
     });
 
@@ -106,7 +242,6 @@
       }
     }
 
-    // popuni dropdown
     const hourSelect = document.getElementById('hour-select');
     const minuteSelect = document.getElementById('minute-select');
     for (let h = 0; h < 24; h++) {
@@ -123,27 +258,4 @@
     function saveSchedule() {
       const hour = parseInt(hourSelect.value);
       const minute = parseInt(minuteSelect.value);
-      const trajanjeSek = parseInt(document.getElementById('duration-sec').value);
-      const ucestalostDana = parseFloat(document.getElementById('frequency-select').value);
-
-      client.publish(topicRasporedDodaj, JSON.stringify({ hour, minute, trajanjeSek, ucestalostDana }));
-    }
-
-    function prikaziRasporede(data) {
-      const list = document.getElementById('schedule-list');
-      list.innerHTML = '';
-      if (!data || data.length === 0) {
-        list.innerHTML = '<p>Nema sačuvanih rasporeda</p>';
-        return;
-      }
-      data.forEach((s, idx) => {
-        const item = document.createElement('div');
-        item.className = 'schedule-item';
-        item.innerHTML = `<span><b>${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</b> · ${s.trajanjeSek}s · ${s.ucestalostDana}/dan</span>
-                          <button class="delete" onclick="client.publish('${topicRasporedObrisi}', '${idx}')">✕</button>`;
-        list.appendChild(item);
-      });
-    }
-  </script>
-</body>
-</html>
+      const trajanjeSek = parseInt(document.getElementBy
