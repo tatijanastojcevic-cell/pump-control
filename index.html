@@ -4,6 +4,12 @@
   <meta charset="utf-8">
   <title>Basta Tatijana</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    h2 { margin-top: 30px; }
+    button { margin: 5px; padding: 5px 10px; }
+    .raspored { margin: 5px 0; padding: 5px; border: 1px solid #ccc; border-radius: 5px; }
+  </style>
 </head>
 <body>
   <h2>🌿 Kontrola pumpe</h2>
@@ -21,7 +27,6 @@
   <div id="rasporedLista"></div>
 
 <script>
-  // MQTT konekcija
   const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
   client.on("connect", function() {
@@ -40,7 +45,7 @@
       let html = "";
       lista.forEach((r, i) => {
         if (r.aktivan !== false) {
-          html += `<div>
+          html += `<div class="raspored">
             ⏰ ${r.hour}:${r.minute}, trajanje ${r.trajanjeSek}s
             <button onclick="ukloniRaspored(${i})">Ukloni</button>
           </div>`;
